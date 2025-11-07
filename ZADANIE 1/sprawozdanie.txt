@@ -1,0 +1,8 @@
+katalog /usr/src/mm
+* main.c - zdefiniowana funkcja do_getprocnr
+* table.c - dodano do_getprocnr jako nr. 78
+* proto.h - zadeklarowano prototyp funkcji do_getprocnr
+katalog /usr
+* zdefiniowano funkcje testujaca test_dogetprocnr
+katalog /usr/include/minix
+* zdefiniowano GETPROCNR jako 78
