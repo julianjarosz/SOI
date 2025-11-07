@@ -26,9 +26,9 @@ for(pid = pidstart; pid <= pidstart + 10; pid++){
         result = getprocnr(pid);
 
         if (result < 0){
-            printf("Pid: %d , error : %d\n", pid, errno);
+            printf("not found: %d , %d\n", pid, errno);
         } else {
-            printf("Pid : %d index -> %d\n", pid, result);
+            printf("found  %d , %d\n", pid, result);
         }
         }
         return 0;
