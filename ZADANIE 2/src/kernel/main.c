@@ -45,6 +45,9 @@ PUBLIC void main()
   /* Clear the process table.
    * Set up mappings for proc_addr() and proc_number() macros.
    */
+  quants[0] = 1;
+  quants[1] = 3;
+  quants[2] = 5;
   for (rp = BEG_PROC_ADDR, t = -NR_TASKS; rp < END_PROC_ADDR; ++rp, ++t) {
 	rp->category = 0;
 	rp->p_nr = t;		/* proc number from ptr */

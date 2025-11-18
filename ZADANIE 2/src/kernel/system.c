@@ -146,11 +146,7 @@ FORWARD _PROTOTYPE( int do_getmap, (message *m_ptr) );
 FORWARD _PROTOTYPE( int do_sysctl, (message *m_ptr) );
 FORWARD _PROTOTYPE( int do_puts, (message *m_ptr) );
 FORWARD _PROTOTYPE( int do_findproc, (message *m_ptr) );
-
-FORWARD _PROTOTYPE( int do_getCategory, (message *m_ptr) );
-FORWARD _PROTOTYPE( int do_setCategory, (message *m_ptr) );
-FORWARD _PROTOTYPE( int do_getQuants, (message *m_ptr) );
-FORWARD _PROTOTYPE( int do_setQuants, (message *m_ptr) );
+FORWARD _PROTOTYPE( int do_setcategory, (message *m_ptr) );
 
 
 
@@ -188,10 +184,8 @@ PUBLIC void sys_task()
 	    case SYS_SYSCTL:	r = do_sysctl(&m);	break;
 	    case SYS_PUTS:	r = do_puts(&m);	break;
 	    case SYS_FINDPROC:	r = do_findproc(&m);	break;
-      case SYS_GETCATEGORY: r = do_getCategory(&m); break;
-      case SYS_SETCATEGORY: r = do_setCategory(&m); break;
-      case SYS_GETQUANTS: r = do_getQuants(&m); break;
-      case SYS_SETQUANTS: r = do_setQuants(&m); break;
+        case SYS_SETCATEGORY: r = do_setcategory(&m); break;
+   
 
 	    default:		r = E_BAD_FCN;
 	}
@@ -202,52 +196,21 @@ PUBLIC void sys_task()
 }
 
 
-int quants[3]= {1, 3, 5}; // zmienna globalna
+int quants[3]; 
 
-PRIVATE int do_getCategory(register message *m_ptr){
-  struct proc *rp;
-  rp = proc_addr(m_ptr->m1_i1); // znajdz deskryptor procesu
-  if( isempty(rp) ){ // jezeli pusty to zwroc blad
-    return EFAULT;
-  }
-  m_ptr->m1_i1 = rp->category; // przypisz kategorie procesu do pola
-  return OK;
-}
+PRIVATE int do_setcategory(m_ptr)
+register message *m_ptr;
+{
 
-PRIVATE int do_setCategory(register message *m_ptr){
-  // m1_i1 przechowuje id
-  // m1_i2 przechowuje kategorie
   struct proc *rp;
   if (m_ptr->m1_i2 < 0 || m_ptr->m1_i2 > 2){
     return EFAULT;
   }
-  rp = proc_addr(m_ptr->m1_i1); // znajdz deskryptor procesu
-  if( isempty(rp) ){ 
+  rp = proc_addr(m_ptr->m1_i1); 
+  if( isemptyp(rp) ){ 
     return EFAULT;
   }
-  rp->category = m_ptr->m1_i1; 
-  return OK;
-}
-
-PRIVATE int do_getQuants(register message *m_ptr){
-  if( m_ptr->m1_i1 < 0 || m_ptr->m1_i1 > 2){
-    return EFAULT;
-  }
-  m_ptr->m1_i1 = quants[m_ptr->m1_i1];
-  return OK;
-}
-
-
-PRIVATE int do_setQuants(register message *m_ptr){
-  // m1_i1 przechowuje kategorie
-  // m1_i2 przechowuje wartosc kwantu czasu
-  if( m_ptr->m1_i1 < 0 || m_ptr->m1_i1 > 2){
-    return EFAULT;
-  }
-  if( m_ptr->m1_i2 < 1 || m_ptr->m1_i2 > 20){
-    return EFAULT;
-  }
-  quants[m_ptr->m1_i1] = m_ptr->m1_i2;
+  rp->category = m_ptr->m1_i2; 
   return OK;
 }
 
@@ -296,8 +259,8 @@ register message *m_ptr;	/* pointer to request message */
   rpc->sys_time = 0;
   rpc->child_utime = 0;
   rpc->child_stime = 0;
+  
   rpc->category = 0;
-
   return(OK);
 }
 

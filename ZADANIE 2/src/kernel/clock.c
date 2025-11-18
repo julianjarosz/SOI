@@ -181,17 +181,19 @@ PRIVATE void do_clocktick()
 	}
   }
 
-  /* If a user process has been running too long, pick another one. */
+  /* Wewnątrz do_clocktick w clock.c */
+
+/* If a user process has been running too long, pick another one. */
+
   if (--sched_ticks <= 0) {
 
-	  if (bill_ptr == prev_ptr) lock_sched();	/* process has run too long */
-    if(proc_ptr->p_pid != 0){
-      sched_ticks = SCHED_RATE * quants[proc_ptr->category];
-    } else{
-      sched_ticks = SCHED_RATE;
-    }
-	prev_ptr = bill_ptr;			/* new previous process */
-  }
+    if (bill_ptr == prev_ptr) lock_sched(); /* process has run too long */
+
+    sched_ticks = SCHED_RATE * quants[proc_ptr->category];
+
+    prev_ptr = bill_ptr; /* new previous process */
+
+}
 }
 
 
@@ -478,11 +480,12 @@ int irq;
 	return 1;	/* Reenable interrupts */
   }
 
-  if (--sched_ticks == 0) {
-	/* If bill_ptr == prev_ptr, no ready users so don't need sched(). */
-	sched_ticks = SCHED_RATE;	/* reset quantum */
-	prev_ptr = bill_ptr;		/* new previous process */
-  }
+  
+  if (--sched_ticks <= 0) {
+      
+      sched_ticks = SCHED_RATE * quants[bill_ptr->category]; 
+      prev_ptr = bill_ptr;
+  }  
   return 1;	/* Reenable clock interrupt */
 }
 

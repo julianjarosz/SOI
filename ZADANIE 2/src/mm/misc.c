@@ -12,28 +12,26 @@
 #include <sys/svrctl.h>
 #include "mproc.h"
 #include "param.h"
-
+#include <errno.h>
 #include <minix/com.h>
 
-PUBLIC int do_getcategory(){
-	int r = _taskcall(SYSTASK, SYS_GETCATEGORY, &mm_in);
-	mp->mp_reply = mm_in;
-	return r;
-}
-
 PUBLIC int do_setcategory(){
-	return _taskcall(SYSTASK, SYS_SETCATEGORY, &mm_in);
+	int i;
+	int indeks = -1;
+	for (i=0; i < NR_PROCS; i++){
+		if (mproc[i].mp_pid == mm_in.m1_i1 && (mproc[i].mp_flags & IN_USE)) {
+	         	indeks = i; 
+				break;
+		}
+	}
+	if(indeks != -1){
+		mm_in.m1_i1 = indeks;
+		return _taskcall(SYSTASK, SYS_SETCATEGORY, &mm_in);
+	}else{
+		return(ESRCH);
+	}
 }
 
-PUBLIC int do_getquants(){
-	int r = _taskcall(SYSTASK, SYS_GETQUANTS, &mm_in);
-	mp->mp_reply = mm_in;
-	return r;
-}
-
-PUBLIC int do_setquants(){
-	return _taskcall(SYSTASK, SYS_SETQUANTS, &mm_in);
-}
 /*=====================================================================*
  *			    do_reboot				       *
  *=====================================================================*/

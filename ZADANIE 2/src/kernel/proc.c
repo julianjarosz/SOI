@@ -325,6 +325,7 @@ PRIVATE void pick_proc()
    * always-ready user task to avoid this special case.
    */
   bill_ptr = proc_ptr = proc_addr(IDLE);
+  
 }
 
 /*===========================================================================*
