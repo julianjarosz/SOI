@@ -1,0 +1,7 @@
+When implementing the task, a semaphore should be used for synchronization (only p and v operations) - the Semaphore class defined in the monitor.h file located on the course page. The task must be performed using threads (using global variables).
+
+
+9-element FIFO buffer. Two consumers and two producers. Producer A produces the letter A. Producer B produces the letter B. An item is removed from the buffer after being read by both consumers when the number of items in the buffer is greater than 3. Only the last item in the buffer can be read. The consumer can read a given element only once.
+
+
+9-element FIFO buffer. Three consumers A, B, C. Two producers. The item is removed from the buffer after being read by consumer A and B or C (once an item is read by A or B it cannot be read by C). Only the last element in the buffer can be read. The consumer can read a given element only once.
