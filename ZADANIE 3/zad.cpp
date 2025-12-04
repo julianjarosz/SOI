@@ -46,13 +46,11 @@ private:
 public:
     Buffer() 
         : mutex(1),           
-          empty(0), 
-          full(BUFFER_SIZE)
+          empty(9), 
+          full(0)
     {
         head = 0; tail = 0; 
-        count = BUFFER_SIZE;
-        for (int i = 0; i < BUFFER_SIZE; ++i)
-            A[i] = i + 1;
+        count = 0;
     }
 
     void put(int item, std::string prodName)
@@ -172,7 +170,7 @@ void* watekKonsumentB(void* arg)
         #ifdef _WIN32
         Sleep(500);
         #else
-        usleep(40000000);
+        usleep(400000);
         #endif
         
     }
