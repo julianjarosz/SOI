@@ -1,7 +1,16 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cstdlib>
+#include <ctime>
 #include "monitor.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <pthread.h>
+#endif
 
 #define BUFFER_SIZE 9
 #define MIN_TO_CONSUME 3 
@@ -9,9 +18,10 @@
 class Buffer
 {
 private:
-    Semaphore mutex;       // chroni dostęp do tablicy "masz dostep"
-    Semaphore empty;    // liczy wolne miejsca dla producenta "jest wolne miejsce"
-    Semaphore full;     // liczy ile jest elementow "cos jest w srodku"
+    Semaphore mutex;       
+    Semaphore empty;      
+    Semaphore semEven;   
+    Semaphore semOdd;    
 
     int A[BUFFER_SIZE];
     int head;  
@@ -20,101 +30,95 @@ private:
 
     void printState(std::string who, std::string msg)
     {
-        std::cout << " [" << who << "] -> " << msg 
-                  <<"{ ";
-
-        if (count == 0)
-        {
+        std::cout << " [" << who << "] -> " << msg << "\n" 
+                  << "stan bufora: { ";
+        if (count == 0) {
             std::cout << "pusto";
-        }
-        else
-        {
+        } else {
             int tempHead = head; 
-
-            for (int i = 0; i < count; ++i)
-            {
+            for (int i = 0; i < count; ++i) {
                 std::cout << A[tempHead];
-
-                if (i < count - 1) 
-                    std::cout << ", ";
-
+                if (i < count - 1) std::cout << ", ";
                 tempHead = (tempHead + 1) % BUFFER_SIZE;
             }
         }
-        std::cout << " }) " << count << "\n\n";
+        std::cout << " } (Liczba elem: " << count << ")\n\n";
     }
+
+    void signalNextConsumer(std::string triggerSource)
+    {
+        if (count > MIN_TO_CONSUME)
+        {
+            int val = A[head];
+            if (val % 2 == 0)
+            {
+                std::cout << "Otwieram semafor dla Konsumenta A.\n";
+                semEven.v();
+            }
+            else
+            {
+                std::cout << "Otwieram semafor dla Konsumenta B.\n";
+                semOdd.v();
+            }
+        }
+        else
+        {
+            std::cout << "Za malo elementow (" << count << ").\n";
+        }
+    }
+
 public:
     Buffer() 
         : mutex(1),           
-          empty(0), 
-          full(BUFFER_SIZE)
+          empty(9), 
+          semEven(0), 
+          semOdd(0)   
     {
         head = 0; tail = 0; 
-        count = BUFFER_SIZE;
-        for (int i = 0; i < BUFFER_SIZE; ++i)
-            A[i] = i + 1;
+        count = 0;
     }
 
     void put(int item, std::string prodName)
     {
-        empty.p(); // czekaj na miejsce
-        mutex.p();    // zablokuj bufor, producent z niego korzysta
+        empty.p();   
+        mutex.p();   
 
         A[tail] = item;
         tail = (tail + 1) % BUFFER_SIZE;
         count++;
 
         printState(prodName, "WSTAWIL " + std::to_string(item));
-        mutex.v();    // odblokuj bufor
-        full.v();  // obudz konsumentow
+
+        if (count == MIN_TO_CONSUME + 1)
+        {
+             signalNextConsumer(prodName);
+        }
+
+            mutex.v();
     }
 
-
-    bool tryGet(bool wantEven, std::string name)
+    void get(bool wantEven, std::string name)
     {
-        // czekamy na element
-        full.p(); 
-        
-        // sprawdzamy go
-        mutex.p();
+        std::string typ = wantEven ? "PARZYSTE" : "NIEPARZYSTE";
+        std::cout << " [" << name << "] PROBUJE POBRAC LICZBE " << typ << ".\n";
+        if (wantEven)
+            semEven.p();
+        else
+            semOdd.p();
 
-        printState(name, "PROBUJE CZYTAC...");
+        mutex.p(); 
 
-        // jezeli jest za malo elementow, to musimy zablokowac probe
-        if (count <= MIN_TO_CONSUME)
-        {
-            printState(name, "BLOKADA: Za malo elementow!");
-            mutex.v();   // wyjscie z bufora
-            full.v(); // obudzenie innego konsumenta
-            return false;
-            
-        }
-
-        // pobieramy wartosc z poczatku
-        int val = A[head];
-        bool isEven = (val % 2 == 0);
-
-        if (isEven != wantEven)
-        {
-            printState(name, "BLOKADA: Zla parzystosc!");
-            mutex.v();
-            full.v(); // obudzenie innego konsumenta, bo jednemu nie pasowala wartosc
-            return false;
-        }
-
-        // zgadza sie parzystosc i wielkosc bufora, weic pobieramy element i przesuwamy kolejke
         int item = A[head];
         head = (head + 1) % BUFFER_SIZE;
         count--;
         
-        printState(name, "SUKCES! Pobiera: " + std::to_string(item));
+        printState(name, "POBRAL LICZBE: " + std::to_string(item));
 
-        mutex.v();    // odblokuj mozliwos dostepu do bufora
-        empty.v(); // pobralismy element, wiec producent moze cos do bufora wstawic
+        empty.v(); 
         
-        // zdjelismy juz element, wiec nie musimy robic full.v()
-        return true;
+        signalNextConsumer(name);
     
+        mutex.v(); 
     }
 };
 
@@ -127,14 +131,12 @@ void* watekProducent(void* arg)
 
     while(true)
     {
-        int val;
-        
-        val = (rand() % 100) + 1;
+        int val = (rand() % 100) + 1;
 
         #ifdef _WIN32
-        Sleep(800 + (id * 300)); 
+        Sleep(800 + (id * 200)); 
         #else
-        usleep(40000); 
+        usleep(500000); 
         #endif
         
         buffer.put(val, name);
@@ -142,37 +144,31 @@ void* watekProducent(void* arg)
     return NULL;
 }
 
-void* watekKonsumentA(void* arg)
+void* watekKonsumentA(void* arg) // Parzysty
 {
-    std::string name = "KonsA";
-    
+    std::string name = "Kons(P)";
     while(true)
     {
-        buffer.tryGet(true, name);
-        
+        buffer.get(true, name);
         #ifdef _WIN32
-        Sleep(200);
+        Sleep(1000);
         #else
-        usleep(4000);
+        usleep(600000);
         #endif
-        
-
     }
     return NULL;
 }
 
-void* watekKonsumentB(void* arg)
+void* watekKonsumentB(void* arg) // Nieparzysty
 {
-    std::string name = "KonsB";
-
+    std::string name = "Kons(NP)";
     while(true)
     {
-        buffer.tryGet(false, name);
-        
+        buffer.get(false, name);
         #ifdef _WIN32
         Sleep(500);
         #else
-        usleep(40000000);
+        usleep(700000);
         #endif
         
     }
@@ -182,27 +178,22 @@ void* watekKonsumentB(void* arg)
 int main()
 {
     srand(time(NULL));
-    printf("Start: Prod A(Parzyste), Prod B(Nieparzyste), 2 Konsumentow.\n");
+    printf("--- START SYMULACJI ---\n");
 
 #ifdef _WIN32
     HANDLE tid[4];
     DWORD id;
-
     tid[0] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watekProducent, (void*)1, 0, &id); 
     tid[1] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watekProducent, (void*)2, 0, &id); 
-    
     tid[2] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watekKonsumentA, 0, 0, &id);
     tid[3] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watekKonsumentB, 0, 0, &id);
-
     WaitForSingleObject(tid[0], INFINITE); 
 #else
     pthread_t p1, p2, kA, kB;
-
     pthread_create(&p1, NULL, watekProducent, (void*)1); 
     pthread_create(&p2, NULL, watekProducent, (void*)2); 
     pthread_create(&kA, NULL, watekKonsumentA, NULL);
     pthread_create(&kB, NULL, watekKonsumentB, NULL);
-
     pthread_join(p1, NULL);
 #endif
 
