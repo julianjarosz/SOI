@@ -76,6 +76,7 @@ public:
     {
         head = 0; tail = 0; 
         count = 0;
+        count = 0;
     }
 
     void put(int item, std::string prodName)
