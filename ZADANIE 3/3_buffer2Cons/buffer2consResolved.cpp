@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include "semaphore.h"
+#include <monitor.h>
 
 int const threadsCounts = 4;  // number of threads
 

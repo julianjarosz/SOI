@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "monitor.h": "cpp",
+        "bufor.cpp": "cpp",
+        "pthread.h": "c"
+    }
+}

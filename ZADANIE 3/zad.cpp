@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdlib>
 #include <ctime>
-#include "monitor.h"
+#include "monitor.h" 
 
 #ifdef _WIN32
 #include <windows.h>
@@ -94,7 +94,7 @@ public:
              signalNextConsumer(prodName);
         }
 
-            mutex.v();
+        mutex.v();    
     }
 
     void get(bool wantEven, std::string name)
@@ -115,9 +115,9 @@ public:
         printState(name, "POBRAL LICZBE: " + std::to_string(item));
 
         empty.v(); 
-        
+
         signalNextConsumer(name);
-    
+
         mutex.v(); 
     }
 };
@@ -132,7 +132,7 @@ void* watekProducent(void* arg)
     while(true)
     {
         int val = (rand() % 100) + 1;
-
+        
         #ifdef _WIN32
         Sleep(800 + (id * 200)); 
         #else
