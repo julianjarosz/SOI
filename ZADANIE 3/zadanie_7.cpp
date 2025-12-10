@@ -42,7 +42,9 @@ public:
 		// insert element to buffer
 		values.push_back(value);
 		print("P");
-		signalNextConsumer();
+		if(values.size() == 4){
+			signalNextConsumer();
+		}
 		mutex.v();
 	
 	}
