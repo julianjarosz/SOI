@@ -74,7 +74,7 @@ public:
     {
         mutex.p(); 
         
-        while (!values.empty() && values.size() <= 3 || values.front() % 2 != 0)
+        while (values.size() <= 3 || values.front() % 2 != 0)
         {
             waitingA = true;
             mutex.v();
@@ -97,7 +97,7 @@ public:
     {
         mutex.p();
         
-        while (!values.empty() && values.size() <= 3 || values.front() % 2 == 0)
+        while (values.size() <= 3 || values.front() % 2 == 0)
         {
            
             waitingB = true;
