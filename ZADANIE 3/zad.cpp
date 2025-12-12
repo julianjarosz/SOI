@@ -1,202 +1,191 @@
 #include <iostream>
-#include <string>
 #include <vector>
-#include <cstdlib>
+#include <string>
 #include <ctime>
-#include "monitor.h" 
+#include "semaphore.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #else
 #include <unistd.h>
-#include <pthread.h>
 #endif
-
-#define BUFFER_SIZE 9
-#define MIN_TO_CONSUME 3 
+// 2 producentow, 2 konsumentow. Kons A pobiera liczby parzyste, Kons B nieparzyste.
+// warunki: bufor.size() > 3 przed pobraniem przez konsumenta i parzystosc/liczba nieparzysta
+int const threadsCounts = 4;
+int const bufferSize = 9;
 
 class Buffer
 {
 private:
     Semaphore mutex;       
-    Semaphore empty;      
-    Semaphore semEven;   
-    Semaphore semOdd;    
+    Semaphore empty;       
+    Semaphore semA;       
+    Semaphore semB;
 
-    int A[BUFFER_SIZE];
-    int head;  
-    int tail;  
-    int count; 
+    bool waitingA;
+    bool waitingB;
 
-    void printState(std::string who, std::string msg)
+    std::vector<int> values;
+
+    void printBuffer()
     {
-        std::cout << " [" << who << "] -> " << msg << "\n" 
-                  << "stan bufora: { ";
-        if (count == 0) {
-            std::cout << "pusto";
-        } else {
-            int tempHead = head; 
-            for (int i = 0; i < count; ++i) {
-                std::cout << A[tempHead];
-                if (i < count - 1) std::cout << ", ";
-                tempHead = (tempHead + 1) % BUFFER_SIZE;
-            }
-        }
-        std::cout << " } (Liczba elem: " << count << ")\n\n";
+        std::cout << "   [BUFOR: ";
+        for (auto v : values) std::cout << v << " ";
+        std::cout << "] Size: " << values.size() << "\n";
     }
 
-    void signalNextConsumer(std::string triggerSource)
+    void signalNext()
     {
-        if (count > MIN_TO_CONSUME)
-        {
-            int val = A[head];
-            if (val % 2 == 0)
+        if(values.size() > 3){
+            int val = values.front();
+            
+            if (val % 2 == 0 && waitingA)
             {
-                std::cout << "Otwieram semafor dla Konsumenta A.\n";
-                semEven.v();
+                waitingA = false;
+                semA.v();
             }
-            else
+            else if (val % 2 != 0 && waitingB)
             {
-                std::cout << "Otwieram semafor dla Konsumenta B.\n";
-                semOdd.v();
+                waitingB = false;
+                semB.v();
             }
-        }
-        else
-        {
-            std::cout << "Za malo elementow (" << count << ").\n";
         }
     }
 
 public:
     Buffer() 
-        : mutex(1),           
-          empty(9), 
-          semEven(0), 
-          semOdd(0)   
+        : mutex(1), empty(bufferSize), semA(0), semB(0), 
+          waitingA(false), waitingB(false)
     {
-        head = 0; tail = 0; 
-        count = 0;
-        count = 0;
     }
 
-    void put(int item, std::string prodName)
+    void put(int value)
     {
-        empty.p();   
-        mutex.p();   
-
-        A[tail] = item;
-        tail = (tail + 1) % BUFFER_SIZE;
-        count++;
-
-        printState(prodName, "WSTAWIL " + std::to_string(item));
-
-        if (count == MIN_TO_CONSUME + 1)
-        {
-             signalNextConsumer(prodName);
-        }
-
-        mutex.v();    
-    }
-
-    void get(bool wantEven, std::string name)
-    {
-        std::string typ = wantEven ? "PARZYSTE" : "NIEPARZYSTE";
-        std::cout << " [" << name << "] PROBUJE POBRAC LICZBE " << typ << ".\n";
-        if (wantEven)
-            semEven.p();
-        else
-            semOdd.p();
-
+        empty.p(); 
         mutex.p(); 
-
-        int item = A[head];
-        head = (head + 1) % BUFFER_SIZE;
-        count--;
-        
-        printState(name, "POBRAL LICZBE: " + std::to_string(item));
-
-        empty.v(); 
-
-        signalNextConsumer(name);
-
+        values.push_back(value);
+        std::cout << "PRODUCENT: Dodano " << value << ".";
+        printBuffer();
+        signalNext();
         mutex.v(); 
     }
-};
 
+    int getA()
+    {
+        mutex.p(); 
+        
+        while (!values.empty() && values.size() <= 3 || values.front() % 2 != 0)
+        {
+            waitingA = true;
+            mutex.v();
+            semA.p();         // czeka na sygnał od signalNext()
+            mutex.p();
+        }
+        
+        int v = values.front();
+        values.erase(values.begin());
+        std::cout << "KONSUMENT A: ZABRAL " << v << ".";
+        printBuffer();
+        
+        empty.v();
+        signalNext();
+        mutex.v();
+        return v;
+    }
+
+    int getB()
+    {
+        mutex.p();
+        
+        while (!values.empty() && values.size() <= 3 || values.front() % 2 == 0)
+        {
+           
+            waitingB = true;
+            mutex.v();
+            semB.p();
+            mutex.p();
+        }
+        
+        int v = values.front();
+        values.erase(values.begin());
+        std::cout << "KONSUMENT B: ZABRAL " << v << ".";
+        printBuffer();
+        
+        empty.v();
+        signalNext();
+        mutex.v();
+        return v;
+    }
+};
 Buffer buffer;
 
-void* watekProducent(void* arg)
-{
-    long id = (long)arg; 
-    std::string name = (id == 1) ? "ProdA" : "ProdB";
 
-    while(true)
-    {
-        int val = (rand() % 100) + 1;
-        
+void* threadProd(void* arg)
+{
+    while(true) {
         #ifdef _WIN32
-        Sleep(800 + (id * 200)); 
+        Sleep(800);  
         #else
-        usleep(500000); 
+        usleep(8000); 
         #endif
-        
-        buffer.put(val, name);
+        buffer.put(rand() % 100 + 1);
     }
     return NULL;
 }
 
-void* watekKonsumentA(void* arg) // Parzysty
+void* threadConsA(void* arg)
 {
-    std::string name = "Kons(P)";
-    while(true)
+     while(true)
     {
-        buffer.get(true, name);
+        buffer.getA();
         #ifdef _WIN32
-        Sleep(1000);
+        Sleep(1500);
         #else
-        usleep(600000);
+        usleep(800000);
         #endif
     }
     return NULL;
 }
 
-void* watekKonsumentB(void* arg) // Nieparzysty
+void* threadConsB(void* arg)
 {
-    std::string name = "Kons(NP)";
     while(true)
     {
-        buffer.get(false, name);
+        buffer.getB();
         #ifdef _WIN32
-        Sleep(500);
+        Sleep(1500);
         #else
-        usleep(700000);
+        usleep(800000);
         #endif
-        
     }
     return NULL;
 }
 
 int main()
 {
-    srand(time(NULL));
-    printf("--- START SYMULACJI ---\n");
+    srand(time(NULL)); 
 
 #ifdef _WIN32
-    HANDLE tid[4];
+    HANDLE tid[threadsCounts];
     DWORD id;
-    tid[0] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watekProducent, (void*)1, 0, &id); 
-    tid[1] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watekProducent, (void*)2, 0, &id); 
-    tid[2] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watekKonsumentA, 0, 0, &id);
-    tid[3] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)watekKonsumentB, 0, 0, &id);
-    WaitForSingleObject(tid[0], INFINITE); 
-#else
-    pthread_t p1, p2, kA, kB;
-    pthread_create(&p1, NULL, watekProducent, (void*)1); 
-    pthread_create(&p2, NULL, watekProducent, (void*)2); 
-    pthread_create(&kA, NULL, watekKonsumentA, NULL);
-    pthread_create(&kB, NULL, watekKonsumentB, NULL);
-    pthread_join(p1, NULL);
-#endif
 
+    tid[0] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)threadProd, 0, 0, &id);
+    tid[1] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)threadProd, 0, 0, &id);
+    tid[2] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)threadConsA, 0, 0, &id);
+    tid[3] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)threadConsB, 0, 0, &id);
+
+    for (int i = 0; i < threadsCounts; i++)
+        WaitForSingleObject(tid[i], INFINITE);
+#else
+    pthread_t tid[threadsCounts];
+
+    pthread_create(&(tid[0]), NULL, threadProd, NULL);
+    pthread_create(&(tid[1]), NULL, threadProd, NULL);
+    pthread_create(&(tid[2]), NULL, threadConsA, NULL);
+    pthread_create(&(tid[3]), NULL, threadConsB, NULL);
+
+    for (int i = 0; i < threadsCounts; i++)
+        pthread_join(tid[i], (void**)NULL);
+#endif
     return 0;
 }
