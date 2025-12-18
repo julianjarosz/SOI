@@ -4,21 +4,15 @@
 #include <ctime>
 #include "monitor.h" 
 
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
 int const threadsCounts = 4;
 int const bufferSize = 9;
 
 class Buffer : public Monitor
 {
 private:
-    Condition full;  // producent czeka jesli bufor jest pelny
-    Condition condA; // konsument A czeka tutaj
-    Condition condB; // konsument B czeka tutaj
+    Condition canProduce;   
+    Condition canConsumeA; 
+    Condition canConsumeB; 
 
     std::vector<int> values;
 
@@ -29,24 +23,8 @@ private:
         std::cout << "] Size: " << values.size() << "\n";
     }
 
-    void signalNext()
-    {
-        if (values.size() > 3)
-        {
-            int val = values.front();
-            if (val % 2 == 0)
-            {
-                signal(condA);
-            }
-            else
-            {
-                signal(condB);
-            }
-        }
-    }
-
 public:
-    Buffer() 
+    Buffer() : canProduce(), canConsumeA(), canConsumeB()
     {
     }
 
@@ -56,14 +34,15 @@ public:
 
         while (values.size() >= bufferSize)
         {
-            wait(full);
+            wait(canProduce);
         }
 
         values.push_back(value);
         std::cout << "PRODUCENT: Dodano " << value << ".";
         printBuffer();
 
-        signalNext();
+        signal(canConsumeA);
+        signal(canConsumeB);
 
         leave();
     }
@@ -71,9 +50,18 @@ public:
     int getA()
     {
         enter();
+
         while (values.size() <= 3 || values.front() % 2 != 0)
         {
-            wait(condA);
+            std::cout << "KONSUMENT A: Warunki niespelnione (Size: " << values.size() << ")" << std::endl;
+
+
+            if (values.size() > 3 && values.front() % 2 != 0)
+            {
+                signal(canConsumeB);
+            }
+
+            wait(canConsumeA);
         }
 
         int v = values.front();
@@ -81,9 +69,10 @@ public:
         std::cout << "KONSUMENT A: ZABRAL " << v << ".";
         printBuffer();
 
-        signal(full);
+        signal(canProduce);
+        signal(canConsumeB); 
+        signal(canConsumeA); 
 
-        signalNext();
         leave();
         return v;
     }
@@ -92,10 +81,17 @@ public:
     {
         enter();
 
-
         while (values.size() <= 3 || values.front() % 2 == 0)
         {
-            wait(condB);
+            std::cout << "KONSUMENT B: Warunki niespelnione (Size: " << values.size() << ")" << std::endl;
+
+
+            if (values.size() > 3 && values.front() % 2 == 0)
+            {
+                signal(canConsumeA);
+            }
+
+            wait(canConsumeB);
         }
 
         int v = values.front();
@@ -103,11 +99,9 @@ public:
         std::cout << "KONSUMENT B: ZABRAL " << v << ".";
         printBuffer();
 
-        // powiadom producentow o zwolnieniu miejsca
-        signal(full);
-
-        // sprawdz czy pasuje front
-        signalNext();
+        signal(canProduce);  
+        signal(canConsumeA); 
+        signal(canConsumeB); 
 
         leave();
         return v;
@@ -119,12 +113,12 @@ Buffer buffer;
 
 void* threadProd(void* arg)
 {
-    while (true) {
-#ifdef _WIN32
-        Sleep(800);
-#else
-        usleep(800000); // 800ms
-#endif
+    while(true) {
+        #ifdef _WIN32
+        Sleep(800);  
+        #else
+        usleep(80000); 
+        #endif
         buffer.put(rand() % 100 + 1);
     }
     return NULL;
@@ -132,35 +126,35 @@ void* threadProd(void* arg)
 
 void* threadConsA(void* arg)
 {
-    while (true)
+     while(true)
     {
         buffer.getA();
-#ifdef _WIN32
+        #ifdef _WIN32
         Sleep(1500);
-#else
-        usleep(8000); // 8ms
-#endif
+        #else
+        usleep(800000);
+        #endif
     }
     return NULL;
 }
 
 void* threadConsB(void* arg)
 {
-    while (true)
+    while(true)
     {
         buffer.getB();
-#ifdef _WIN32
+        #ifdef _WIN32
         Sleep(1500);
-#else
-        usleep(8000); // 8ms
-#endif
+        #else
+        usleep(800000);
+        #endif
     }
     return NULL;
 }
 
 int main()
 {
-    srand(time(NULL));
+    srand(time(NULL)); 
 
 #ifdef _WIN32
     HANDLE tid[threadsCounts];
